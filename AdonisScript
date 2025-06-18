@@ -1,71 +1,31 @@
-task.spawn(function()
-    local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local LocalPlayer = Players.LocalPlayer
+pcall(function()
+    task.spawn(function()
+        local RS = game:GetService("ReplicatedStorage")
+        local bad = {
+            "Crash", "CPUCrash", "GPUCrash", "Shutdown", "SoftShutdown",
+            "Kick", "SoftKick", "Seize", "BlockInput", "Break", "Lock",
+            "SetCore", "ServerKick", "ServerShutdown", "Ban", "Mute",
+            "Freeze", "TeleportKill", "ForceReset", "CrashClient",
+            "CrashServer", "MemoryLeak", "BlackScreen", "KickAll"
+        }
 
-    local badFunctions = {
-        "Crash","CPUCrash","GPUCrash","Shutdown","SoftShutdown","Kick","SoftKick","Seize",
-        "BlockInput","Break","Lock","SetCore","ServerKick","ServerShutdown","Ban","Mute",
-        "Freeze","TeleportKill","ForceReset","CrashClient","CrashServer","MemoryLeak",
-        "BlackScreen","KickAll","Explode","Dead","Fatal","ClientCrash"
-    }
-
-    local function tableFind(tbl, val)
-        for i = 1, #tbl do if tbl[i] == val then return true end end
-        return false
-    end
-
-    local function neutralizeModule(modTable)
-        if type(modTable) ~= "table" then return end
-        for name, fn in pairs(modTable) do
-            if type(fn) == "function" and tableFind(badFunctions, name) then
-                modTable[name] = function(...) return nil end
+        local function isBad(cmd)
+            for i = 1, #bad do
+                if cmd == bad[i] then return true end
             end
+            return false
         end
-    end
 
-    -- Hook require
-    local oldRequire = require
-    local adonisKeywords = { "adonis", "clientcommands", "security", "modules" }
-    _G.require = function(mod)
-        local result = oldRequire(mod)
-        if typeof(mod) == "Instance" then
-            local lname = mod.Name:lower()
-            for _, kw in ipairs(adonisKeywords) do
-                if lname:find(kw) then
-                    pcall(neutralizeModule, result)
-                    break
-                end
-            end
-        end
-        return result
-    end
-
-    -- Patch already-loaded modules
-    for _, mod in ipairs(getloadedmodules()) do
-        if mod.Name:lower():find("adonis") then
-            pcall(function()
-                neutralizeModule(getsenv(mod))
-                local mt = getmetatable(mod)
-                if type(mt) == "table" then
-                    for k,v in pairs(mt) do
-                        if type(v) == "function" then
-                            mt[k] = function(...) return nil end
-                        end
+        for _, obj in ipairs(RS:GetDescendants()) do
+            if obj:IsA("RemoteEvent") and obj.Name:lower():find("client") then
+                obj.OnClientEvent:Connect(function(cmd, ...)
+                    if type(cmd) == "string" and isBad(cmd) then
+                        return -- silently block
                     end
-                end
-            end)
+                end)
+            end
         end
-    end
 
-    -- Filter remote commands
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and obj.Name:lower():find("client") then
-            obj.OnClientEvent:Connect(function(cmd, ...)
-                if type(cmd) == "string" and tableFind(badFunctions, cmd) then
-                    return
-                end
-            end)
-        end
-    end
+        getgenv().adonisBypassLoaded = true
+    end)
 end)
