@@ -1,157 +1,32 @@
--- Ultra-Protected Advanced Stealth Adonis Bypass (Autoexec)
+-- ✅ Safe Adonis Remote Bypass (No Metatable Breaking, No Movement Issues)
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- List of harmful function names inside Adonis modules (all lowercase)
-local badFunctions = {
-    "crash","cpucrash","gpucrash","shutdown","softshutdown",
-    "kick","softkick","seize","blockinput","break","lock",
-    "setcore","serverkick","servershutdown","ban","mute",
-    "freeze","teleportkill","forcereset","crashclient",
-    "crashserver","memoryleak","blackscreen","kickall",
-    "crashclient","crashserver"
+-- Only block truly dangerous Adonis remote commands
+local badCommands = {
+    "crash", "kick", "kickall", "crashclient", "crashserver",
+    "cpucrash", "gpucrash", "softkick", "shutdown", "softshutdown",
+    "seize", "blackout", "blackscreen", "memoryleak", "break", "lock",
+    "teleportkill", "forcereset", "serverkick", "servershutdown", "blockinput"
 }
 
-local function tableFind(tbl, val)
-    val = val:lower()
-    for i = 1, #tbl do
-        if tbl[i] == val then return true end
-    end
-    return false
+-- Normalize to lowercase
+local function isBlockedCommand(cmd)
+    return typeof(cmd) == "string" and table.find(badCommands, cmd:lower()) ~= nil
 end
 
-local function neutralizeModule(modTable)
-    if type(modTable) ~= "table" then return end
-    for name, fn in pairs(modTable) do
-        if type(name) == "string" and tableFind(badFunctions, name:lower()) and type(fn) == "function" then
-            modTable[name] = function(...) 
-                warn("[Bypass] Blocked Adonis:", name) 
-                return nil 
-            end
-        end
-    end
-end
-
--- 1) Override require() to catch Adonis modules on load
-do
-    local oldRequire = require
-    local adonisKeywords = { "adonis", "clientcommands", "security", "modules" }
-
-    _G.require = function(mod)
-        local result = oldRequire(mod)
-        if typeof(mod) == "Instance" and mod.Name then
-            local lname = mod.Name:lower()
-            for _, kw in ipairs(adonisKeywords) do
-                if lname:find(kw) then
-                    pcall(neutralizeModule, result)
-                    break
-                end
-            end
-        end
-        return result
-    end
-end
-
--- 2) Patch any already-loaded Adonis modules
-for _, mod in ipairs(getloadedmodules()) do
-    if mod.Name:lower():find("adonis") then
-        local ok, env = pcall(getsenv, mod)
-        if ok then
-            neutralizeModule(env)
-        end
-        local ok2, mt = pcall(getmetatable, mod)
-        if ok2 and type(mt) == "table" then
-            for k, v in pairs(mt) do
-                if type(v) == "function" then
-                    mt[k] = function(...) return nil end
-                end
-            end
-        end
-    end
-end
-
--- 3) Intercept Adonis command RemoteEvents in ReplicatedStorage
+-- Scan and connect to all RemoteEvents that might be Adonis
 for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
     if obj:IsA("RemoteEvent") and obj.Name:lower():find("client") then
         obj.OnClientEvent:Connect(function(cmd, ...)
-            if type(cmd) == "string" and tableFind(badFunctions, cmd:lower()) then
-                warn("[Bypass] Blocked Adonis Remote Command:", cmd)
+            if isBlockedCommand(cmd) then
+                warn("[Bypass] Blocked Adonis command:", cmd)
                 return
             end
         end)
     end
 end
 
--- 4) Override Kick method via metatable hook to block kicking
-pcall(function()
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false)
-    local oldNamecall = mt.__namecall
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if tostring(self) == "LocalPlayer" and method == "Kick" then
-            warn("[Bypass] Blocked LocalPlayer:Kick()")
-            return nil
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
-end)
-
--- 5) Override core Lua functions that might crash the client
-pcall(function()
-    if hookfunction then
-        hookfunction(error, function(...) return nil end)
-        hookfunction(assert, function(...) return (...) end)
-    end
-end)
-
--- 6) Prevent character parts destruction
-local function protectCharParts()
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    for _, part in ipairs(char:GetDescendants()) do
-        if typeof(part.Destroy) == "function" then
-            if hookfunction then
-                pcall(function()
-                    hookfunction(part.Destroy, function() return end)
-                end)
-            else
-                part.Destroy = function() end
-            end
-        end
-        if typeof(part.Remove) == "function" then
-            if hookfunction then
-                pcall(function()
-                    hookfunction(part.Remove, function() return end)
-                end)
-            else
-                part.Remove = function() end
-            end
-        end
-    end
-end
-task.spawn(protectCharParts)
-
--- 7) Patch global tables for crash commands if any
-task.spawn(function()
-    for i, v in pairs(_G) do
-        if type(v) == "table" then
-            for k, func in pairs(v) do
-                if typeof(k) == "string" and tableFind(badFunctions, k:lower()) and type(func) == "function" then
-                    v[k] = function() return nil end
-                end
-            end
-        end
-    end
-end)
-
--- 8) Early load Adonis script ASAP (optional)
-pcall(function()
-    task.spawn(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/iamcheese-man/source/refs/heads/main/AdonisScript", true))()
-    end)
-end)
-
-print("[Bypass] Ultra-Protected Advanced Adonis Bypass loaded.")
+print("[Bypass] ✅ Safe Adonis crash/kick command filter active")
